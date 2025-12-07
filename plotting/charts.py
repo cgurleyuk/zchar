@@ -2,11 +2,13 @@ import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
 
-def create_plots(df: pd.DataFrame | None, width: float, length: float, dfs_prev: list[pd.DataFrame] | None = None):
+def create_plots(current: dict | None = None, history: list[dict] | None = None):
     """
     Generates a list of plotly figures for standard gm/Id plots.
-    If df is None, returns empty plots with correct axes.
-    If dfs_prev is provided (list of DFs), overlays them as dashed lines.
+    
+    Args:
+        current: Dict with keys 'data' (DataFrame) and 'params' (Dict).
+        history: List of similar dicts for previous results.
     """
     
     # 1. gm/Id vs Normalized Current (Id / (W/L))
@@ -24,13 +26,37 @@ def create_plots(df: pd.DataFrame | None, width: float, length: float, dfs_prev:
     figs = [fig1, fig2, fig3, fig4]
 
     # Helper to add traces
-    def add_data_traces(dataframe, is_previous=False, index=0):
+    def add_data_traces(result_obj, is_previous=False, index=0):
+        if result_obj is None:
+            return
+            
+        dataframe = result_obj.get('data')
+        params = result_obj.get('params', {})
+        
         if dataframe is None or dataframe.empty:
             return
 
-        # Pre-calculate derived metrics locally
-        # We recalculate here to be safe, assuming raw spice output columns exist
-        w_over_l = width / length if length > 0 else 1.0
+        # Extract params for normalization from the stored result
+        # Fallbacks to safe defaults if missing (though they should exist)
+        w_um = params.get('width', 10.0)
+        l_um = params.get('length', 1.0)
+        # We need to consider multiplier 'm' and fingers 'ng' depending on how simulation was run.
+        # run_dc_sweep uses w_total = width * 1e-6 (passed in).
+        # But wait, app.py passes `width * 1e-6`.
+        # Stored 'params' in app.py are the raw UI inputs:
+        # 'width': width (um)
+        # 'length': length (um)
+        # 'm': m
+        # 'ng': ng
+        # The plotting logic previously used `width * 1e-6 * int(m)`.
+        
+        m_val = int(params.get('m', 1))
+        
+        # Calculate W/L effective
+        width_m = w_um * 1e-6 * m_val
+        length_m = l_um * 1e-6
+        
+        w_over_l = width_m / length_m if length_m > 0 else 1.0
         
         # Avoid SettingWithCopyWarning if valid DF
         d = dataframe.copy()
@@ -88,23 +114,15 @@ def create_plots(df: pd.DataFrame | None, width: float, length: float, dfs_prev:
             opacity=opacity
         ))
 
-    # Add previous data first (so it's behind current data)
-    if dfs_prev:
-        # Assuming dfs_prev is ordered oldest to newest. 
-        # We want "Prev #1" to be the most recent history item (last in the list).
-        # "Prev #2" is the one before that.
-        total_prev = len(dfs_prev)
-        for i, df_p in enumerate(dfs_prev):
-             # Logic for label index:
-             # if i=0 (oldest), loop index=0. If total=3.
-             # We want label to be #3.
-             # if i=2 (newest), we want label to be #1.
-             # label_idx = total_prev - i
+    # Add previous data first
+    if history:
+        total_prev = len(history)
+        for i, prev_res in enumerate(history):
              label_idx = total_prev - i
-             add_data_traces(df_p, is_previous=True, index=label_idx)
+             add_data_traces(prev_res, is_previous=True, index=label_idx)
 
     # Add current data
-    add_data_traces(df, is_previous=False)
+    add_data_traces(current, is_previous=False)
 
     # Update Layouts (Common settings)
     fig1.update_layout(

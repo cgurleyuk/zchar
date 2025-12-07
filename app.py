@@ -136,8 +136,14 @@ with st.sidebar:
             try:
                 # Store current data in history before updating
                 if st.session_state.data is not None:
-                    # Append current data to history
-                    st.session_state.history.append(st.session_state.data.copy())
+                    # Append current data AND params to history
+                    # We store as a dict to keep them together
+                    result_entry = {
+                        'data': st.session_state.data.copy(),
+                        'params': st.session_state.last_params.copy()
+                    }
+                    st.session_state.history.append(result_entry)
+                    
                     # Trim history to configured depth
                     if len(st.session_state.history) > history_depth:
                         st.session_state.history = st.session_state.history[-history_depth:]
@@ -168,13 +174,19 @@ with st.sidebar:
 # Always generate plots
 # If data is None, create_plots will return empty figures
 # Prepare history list based on toggle
-dfs_prev = st.session_state.history if show_history else []
+history_to_plot = st.session_state.history if show_history else []
+
+# Bundle current data with its params
+current_result = None
+if st.session_state.data is not None:
+    current_result = {
+        'data': st.session_state.data,
+        'params': st.session_state.last_params
+    }
 
 figs = create_plots(
-    st.session_state.data, 
-    width * 1e-6 * int(m), 
-    length * 1e-6,
-    dfs_prev=dfs_prev
+    current=current_result,
+    history=history_to_plot
 )
 
 # Layout plots using 2x2 grid
