@@ -2,11 +2,11 @@ import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
 
-def create_plots(df: pd.DataFrame | None, width: float, length: float, df_prev: pd.DataFrame | None = None):
+def create_plots(df: pd.DataFrame | None, width: float, length: float, dfs_prev: list[pd.DataFrame] | None = None):
     """
     Generates a list of plotly figures for standard gm/Id plots.
     If df is None, returns empty plots with correct axes.
-    If df_prev is provided, overlays it as dashed lines.
+    If dfs_prev is provided (list of DFs), overlays them as dashed lines.
     """
     
     # 1. gm/Id vs Normalized Current (Id / (W/L))
@@ -24,7 +24,7 @@ def create_plots(df: pd.DataFrame | None, width: float, length: float, df_prev: 
     figs = [fig1, fig2, fig3, fig4]
 
     # Helper to add traces
-    def add_data_traces(dataframe, are_previous=False):
+    def add_data_traces(dataframe, is_previous=False, index=0):
         if dataframe is None or dataframe.empty:
             return
 
@@ -38,9 +38,15 @@ def create_plots(df: pd.DataFrame | None, width: float, length: float, df_prev: 
         d['id_norm'] = d['id_abs'] / w_over_l
         d['ft_ghz'] = d['ft'] / 1e9
 
-        line_props = dict(dash='dash', color='gray') if are_previous else dict()
-        suffix = " (Prev)" if are_previous else ""
-        opacity = 0.6 if are_previous else 1.0
+        if is_previous:
+            line_props = dict(dash='dash', color='gray')
+            # 1-based index for the legend: "Prev #1" is the most recent previous result
+            suffix = f" (prev #{index})"
+            opacity = 0.5
+        else:
+            line_props = dict(color='red') # user requested consistent red for current
+            suffix = ""
+            opacity = 1.0
 
         # 1. gm/Id vs Id/W
         fig1.add_trace(go.Scatter(
@@ -83,9 +89,22 @@ def create_plots(df: pd.DataFrame | None, width: float, length: float, df_prev: 
         ))
 
     # Add previous data first (so it's behind current data)
-    add_data_traces(df_prev, are_previous=True)
+    if dfs_prev:
+        # Assuming dfs_prev is ordered oldest to newest. 
+        # We want "Prev #1" to be the most recent history item (last in the list).
+        # "Prev #2" is the one before that.
+        total_prev = len(dfs_prev)
+        for i, df_p in enumerate(dfs_prev):
+             # Logic for label index:
+             # if i=0 (oldest), loop index=0. If total=3.
+             # We want label to be #3.
+             # if i=2 (newest), we want label to be #1.
+             # label_idx = total_prev - i
+             label_idx = total_prev - i
+             add_data_traces(df_p, is_previous=True, index=label_idx)
+
     # Add current data
-    add_data_traces(df, are_previous=False)
+    add_data_traces(df, is_previous=False)
 
     # Update Layouts (Common settings)
     fig1.update_layout(

@@ -78,7 +78,7 @@ with st.sidebar:
     
     default_l = clamp_val('length', min_l, max_l, 0.13)
     default_l = max(min_l, min(default_l, max_l))
-    length = col2.number_input("length (um)", min_value=min_l, max_value=max_l, value=default_l, step=0.01, key="length")
+    length = col2.number_input("length (um)", min_value=min_l, max_value=max_l, value=default_l, step=0.5, key="length")
     
     col3, col4 = st.columns(2)
     ng = col3.number_input("fingers (ng)", value=1, step=1, min_value=1, key="ng")
@@ -95,13 +95,20 @@ with st.sidebar:
     # Initialize Session State
     if 'data' not in st.session_state:
         st.session_state.data = None
-    if 'prev_data' not in st.session_state:
-        st.session_state.prev_data = None
+    if 'history' not in st.session_state:
+        st.session_state.history = []
     if 'last_params' not in st.session_state:
         st.session_state.last_params = {}
 
     run_on_change = st.checkbox("autorun", value=False)
-    run_btn = st.button("run simulation", type="primary")
+    
+    col_hist1, col_hist2 = st.columns([1, 1], vertical_alignment="center")
+    with col_hist1:
+        show_history = st.checkbox("show previous", value=True)
+    with col_hist2:
+        history_depth = st.number_input("max", min_value=1, max_value=10, value=1, step=1)
+    
+    run_btn = st.button("run", type="primary")
 
     # Current parameters (to detect change)
     current_params = {
@@ -127,9 +134,13 @@ with st.sidebar:
     if should_run:
         with st.spinner("running simulation with ngspice..."):
             try:
-                # Store current data as previous before updating
+                # Store current data in history before updating
                 if st.session_state.data is not None:
-                    st.session_state.prev_data = st.session_state.data.copy()
+                    # Append current data to history
+                    st.session_state.history.append(st.session_state.data.copy())
+                    # Trim history to configured depth
+                    if len(st.session_state.history) > history_depth:
+                        st.session_state.history = st.session_state.history[-history_depth:]
 
                 # Run Simulation
                 # inputs are in microns, runner expects meters
@@ -156,11 +167,14 @@ with st.sidebar:
 
 # Always generate plots
 # If data is None, create_plots will return empty figures
+# Prepare history list based on toggle
+dfs_prev = st.session_state.history if show_history else []
+
 figs = create_plots(
     st.session_state.data, 
     width * 1e-6 * int(m), 
     length * 1e-6,
-    df_prev=st.session_state.prev_data
+    dfs_prev=dfs_prev
 )
 
 # Layout plots using 2x2 grid
