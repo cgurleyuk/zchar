@@ -59,14 +59,14 @@ def parse_ngspice_data(file_path: str, device_name: str) -> pd.DataFrame:
     
     
     # Calculate gm/Id
-    data['gm_id'] = data.apply(lambda row: row['gm'] / row['id'] if abs(row['id']) > 1e-15 else 0, axis=1)
+    data['gm_id'] = data.apply(lambda row: row['gm'] / row['id'] if abs(row['id']) > 1e-18 else 0, axis=1)
     
     # Intrinsic Gain: gm/gds
-    data['gm_gds'] = data.apply(lambda row: row['gm'] / row['gds'] if abs(row['gds']) > 1e-15 else 0, axis=1)
+    data['gm_gds'] = data.apply(lambda row: row['gm'] / row['gds'] if abs(row['gds']) > 1e-18 else 0, axis=1)
     
     # Transit Frequency ft ~ gm / (2 pi Cgg)
     # Cgg is total gate capacitance. cgg output is typically capacitance (positive or negative depending on spice?)
     # Usually cgg is positive total gate cap.
-    data['ft'] = data.apply(lambda row: row['gm'] / (2 * np.pi * abs(row['cgg'])) if abs(row['cgg']) > 1e-15 else 0, axis=1)
+    data['ft'] = data.apply(lambda row: row['gm'] / (2 * np.pi * abs(row['cgg'])) if abs(row['cgg']) > 1e-18 else 0, axis=1)
     
     return data
