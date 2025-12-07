@@ -1,0 +1,34 @@
+{
+    "devices": {
+        "sg13_lv_nmos": {
+            "min_width": 0.15,
+            "max_width": 100.0,
+            "min_length": 0.13,
+            "max_length": 10.0,
+            "max_vgs": 1.5
+        },
+        "sg13_lv_pmos": {
+            "min_width": 0.15,
+            "max_width": 100.0,
+            "min_length": 0.13,
+            "max_length": 10.0,
+            "max_vgs": 1.5
+        },
+        "sg13_hv_nmos": {
+            "min_width": 0.30,
+            "max_width": 100.0,
+            "min_length": 0.35,
+            "max_length": 10.0,
+            "max_vgs": 3.3
+        },
+        "sg13_hv_pmos": {
+            "min_width": 0.30,
+            "max_width": 100.0,
+            "min_length": 0.35,
+            "max_length": 10.0,
+            "max_vgs": 3.3
+        }
+    },
+    "pdk_root": "~/analog/pdk/IHP-Open-PDK",
+    "pdk_code": "ihp-sg13g2"
+}

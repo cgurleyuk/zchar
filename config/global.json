@@ -1,0 +1,6 @@
+{
+    "ngspice_path": "~/analog/tools/bin/ngspice",
+    "processes": {
+        "sg13g2": "config/sg13g2.json"
+    }
+}

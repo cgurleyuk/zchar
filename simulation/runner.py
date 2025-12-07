@@ -7,12 +7,6 @@ from pathlib import Path
 from .templates import NMOS_SWEEP_TEMPLATE, PMOS_SWEEP_TEMPLATE
 from .parser import parse_ngspice_data
 
-# User defined path
-NGSPICE_PATH = os.path.expanduser("~/analog/tools/bin/ngspice")
-if not os.path.exists(NGSPICE_PATH):
-    # Fallback to system ngspice if custom path doesn't exist
-    NGSPICE_PATH = "ngspice"
-
 def run_dc_sweep(
     device_name: str,
     width: float,
@@ -23,13 +17,34 @@ def run_dc_sweep(
     vbs: float = 0.0,
     ng: int = 1,
     m: int = 1,
-    model_path: str = None
+    model_path: str = None,
+    sim_config: dict = None
 ):
     """
     Runs a DC sweep for the given device parameters.
     Returns a pandas DataFrame with results.
     """
     
+    # Default config values if not provided (fallback)
+    pdk_root = "/home/cgurleyuk/analog/pdk/IHP-Open-PDK"
+    pdk_code = "ihp-sg13g2"
+    ngspice_bin = "ngspice"
+
+    if sim_config:
+        pdk_root = sim_config.get("pdk_root", pdk_root)
+        pdk_code = sim_config.get("pdk_code", pdk_code)
+        # Expand user path for ngspice if provided
+        if "ngspice_path" in sim_config:
+            ngspice_bin = os.path.expanduser(sim_config["ngspice_path"])
+    
+    # Verify ngspice executable exists if it's an absolute path, 
+    # otherwise trust it's in PATH or handle failure later.
+    if os.path.isabs(ngspice_bin) and not os.path.exists(ngspice_bin):
+        # Fallback or error? For now, we'll try to proceed or just let subprocess fail.
+        # But we can try system ngspice if custom fails.
+        if shutil.which("ngspice"):
+             ngspice_bin = "ngspice"
+
     run_id = str(uuid.uuid4())
     # Use local directory to avoid potential temp permission/path issues with ngspice
     work_dir = Path.cwd() / ".sim_buffer"
@@ -43,8 +58,8 @@ def run_dc_sweep(
     
     # Env variables for spiceinit
     env = os.environ.copy()
-    env["PDK_ROOT"] = "/home/cgurleyuk/analog/pdk/IHP-Open-PDK"
-    env["PDK"] = "ihp-sg13g2"
+    env["PDK_ROOT"] = pdk_root
+    env["PDK"] = pdk_code
     
     # Model configuration
     # We rely on .spiceinit 'sourcepath' to find the library files
@@ -80,10 +95,17 @@ def run_dc_sweep(
     with open(netlist_file, "w") as f:
         f.write(netlist_content)
         
+    # Final check before running
+    if not shutil.which(ngspice_bin) and not (os.path.isfile(ngspice_bin) and os.access(ngspice_bin, os.X_OK)):
+        if sim_config and "ngspice_path" in sim_config:
+             raise FileNotFoundError(f"Ngspice executable not found at configured path: '{sim_config['ngspice_path']}' (expanded: '{ngspice_bin}') and not in system PATH.")
+        else:
+             raise FileNotFoundError(f"Ngspice not found in system PATH and no 'ngspice_path' configured.")
+
     try:
         # Run ngspice from the CURRENT directory so it finds .spiceinit
         # We pass the absolute path to netlist_file
-        cmd = [NGSPICE_PATH, "-b", str(netlist_file)]
+        cmd = [ngspice_bin, "-b", str(netlist_file)]
         
         result = subprocess.run(
             cmd, 

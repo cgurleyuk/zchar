@@ -1,12 +1,14 @@
 import streamlit as st
 import os
 import sys
+import json
 from simulation.runner import run_dc_sweep
 from plotting.charts import create_plots
+import config_utils
 
 # Page configuration
 st.set_page_config(
-    page_title="gm/Id Visualization Tool",
+    page_title="zchar: gm/Id Visualization Tool",
     page_icon="⚡",
     layout="wide"
 )
@@ -19,28 +21,76 @@ st.set_page_config(
 
 with st.sidebar:
     st.header("device parameters")
-    # specific device names
-    device_name = st.selectbox("device type", [
-        "sg13_lv_nmos", 
-        "sg13_lv_pmos", 
-        "sg13_hv_nmos", 
-        "sg13_hv_pmos"
-    ])
     
+    # Load configuration
+    config, error_msg = config_utils.load_process_config()
+    
+    if error_msg:
+        st.error(error_msg)
+    
+    if config:
+        devices = list(config['devices'].keys())
+        device_name = st.selectbox("device type", devices)
+        
+        # Get limits for selected device
+        limits = config['devices'][device_name]
+        min_w, max_w = limits['min_width'], limits['max_width']
+        min_l, max_l = limits['min_length'], limits['max_length']
+        max_vgs_limit = limits['max_vgs']
+    else:
+        # Fallback if config fails
+        device_name = st.selectbox("device type", ["sg13_lv_nmos"])
+        min_w, max_w = 1.0, 100.0
+        min_l, max_l = 0.13, 10.0
+        max_vgs_limit = 1.8
+
     st.subheader("dimensions")
     col1, col2 = st.columns(2)
+    
+    # Helper to clamp values in session state to avoid errors
+    def clamp_val(key, min_v, max_v, default):
+        if key in st.session_state:
+            val = st.session_state[key]
+            if val < min_v: st.session_state[key] = min_v
+            if val > max_v: st.session_state[key] = max_v
+        return default
+
+    # Width limit logic:
+    # W_total = W_finger * ng
+    # Constraint: min_w_finger <= W_finger <= max_w_finger
+    # Therefore: min_w_finger * ng <= W_total <= max_w_finger * ng
+    
+    # Get current ng from session state or default to 1
+    # We need to look ahead at what 'ng' is, or use default for first run.
+    # Since 'ng' widget is below, we rely on session state availability.
+    current_ng = st.session_state.get('ng', 1)
+    
+    eff_min_w = min_w * current_ng
+    eff_max_w = max_w * current_ng
+    
     # W and L in microns
-    width = col1.number_input("width (um)", value=10.0, step=1.0)
-    length = col2.number_input("length (um)", value=0.13, step=0.1)
+    # Ensure default values are within new limits
+    default_w = clamp_val('width', eff_min_w, eff_max_w, 10.0)
+    # If default 10.0 is out of range, clamp it too for the 'value' arg
+    default_w = max(eff_min_w, min(default_w, eff_max_w))
+    
+    width = col1.number_input("width (um)", min_value=eff_min_w, max_value=eff_max_w, value=default_w, step=1.0, key="width")
+    
+    default_l = clamp_val('length', min_l, max_l, 0.13)
+    default_l = max(min_l, min(default_l, max_l))
+    length = col2.number_input("length (um)", min_value=min_l, max_value=max_l, value=default_l, step=0.01, key="length")
     
     col3, col4 = st.columns(2)
-    ng = col3.number_input("fingers (ng)", value=1, step=1, min_value=1)
-    m = col4.number_input("multiplier (m)", value=1, step=1, min_value=1)
+    ng = col3.number_input("fingers (ng)", value=1, step=1, min_value=1, key="ng")
+    m = col4.number_input("multiplier (m)", value=1, step=1, min_value=1, key="m")
     
     st.subheader("biasing")
-    vgs_max = st.number_input("max vgs (v)", value=1.8, step=0.1)
-    vds = st.number_input("vds (v)", value=0.9, step=0.1)
-    vbs_val = st.number_input("vbs (v)", value=0.0, step=0.1)
+    default_vgs = clamp_val('vgs_max', 0.0, max_vgs_limit, max_vgs_limit) # Default to max
+    default_vgs = max(0.0, min(default_vgs, max_vgs_limit))
+    vgs_max = st.number_input("max vgs (v)", min_value=0.0, max_value=max_vgs_limit, value=default_vgs, step=0.1, key="vgs_max")
+    
+    vds = st.number_input("vds (v)", value=0.9, step=0.1, key="vds")
+    vbs_val = st.number_input("vbs (v)", value=0.0, step=0.1, key="vbs_val")
     
     # Initialize Session State
     if 'data' not in st.session_state:
@@ -91,7 +141,8 @@ with st.sidebar:
                     vgs_max=vgs_max,
                     vbs=vbs_val,
                     ng=int(ng),
-                    m=int(m)
+                    m=int(m),
+                    sim_config=config # Pass the full config object
                 )
                 
                 if df is not None and not df.empty:

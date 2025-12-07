@@ -1,4 +1,4 @@
-
+import pytest
 import sys
 import os
 
@@ -6,9 +6,18 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from simulation.runner import run_dc_sweep
+import config_utils
 
-def test_integration():
-    print("Testing NMOS Sweep...")
+@pytest.fixture
+def config():
+    conf, _ = config_utils.load_process_config()
+    return conf
+
+def test_nmos_sweep(config):
+    """Test standard NMOS DC sweep."""
+    if not config:
+        pytest.skip("No configuration loaded")
+
     df = run_dc_sweep(
         device_name="sg13_lv_nmos",
         width=10e-6,
@@ -16,63 +25,65 @@ def test_integration():
         vds=0.9,
         vgs_max=1.8,
         ng=1,
-        m=1
+        m=1,
+        sim_config=config
     )
     
-    if df is not None:
-        print("Success! Data Shape:", df.shape)
-        print("Columns:", df.columns)
-        print(df.head())
-        # Check if derived columns exist
-        if 'gm_id' in df.columns:
-            print("Derived columns present.")
-    else:
-        print("Simulation FAILED.")
+    assert df is not None, "Simulation returned None"
+    assert not df.empty, "DataFrame is empty"
+    assert 'gm_id' in df.columns, "Derived column 'gm_id' missing"
+    assert 'id' in df.columns
 
-    print("-" * 30)
-
-    print("Testing PMOS Sweep...")
-    df_p = run_dc_sweep(
+def test_pmos_sweep(config):
+    """Test standard PMOS DC sweep."""
+    if not config:
+        pytest.skip("No configuration loaded")
+        
+    df = run_dc_sweep(
         device_name="sg13_lv_pmos",
         width=10e-6,
         length=1e-6,
         vds=0.9,
         vgs_max=1.8,
         ng=1,
-        m=1
+        m=1,
+        sim_config=config
     )
-    if df_p is not None:
-         print("Success PMOS! Data Shape:", df_p.shape)
-    
-    print("-" * 30)
+    assert df is not None
+    assert not df.empty
 
-    print("Testing HV NMOS Sweep...")
-    df_hv_n = run_dc_sweep(
+def test_hv_nmos_sweep(config):
+    """Test High-Voltage NMOS Sweep."""
+    if not config:
+        pytest.skip("No configuration loaded")
+
+    df = run_dc_sweep(
         device_name="sg13_hv_nmos",
         width=10e-6,
         length=1e-6,
         vds=3.3,
         vgs_max=3.3,
         ng=1,
-        m=1
+        m=1,
+        sim_config=config
     )
-    if df_hv_n is not None:
-        print("Success HV NMOS! Data Shape:", df_hv_n.shape)
-        
-    print("-" * 30)
-    
-    print("Testing HV PMOS Sweep...")
-    df_hv_p = run_dc_sweep(
+    assert df is not None
+    assert not df.empty
+
+def test_hv_pmos_sweep(config):
+    """Test High-Voltage PMOS Sweep."""
+    if not config:
+        pytest.skip("No configuration loaded")
+
+    df = run_dc_sweep(
         device_name="sg13_hv_pmos",
         width=10e-6,
         length=1e-6,
         vds=3.3,
         vgs_max=3.3,
         ng=1,
-        m=1
+        m=1,
+        sim_config=config
     )
-    if df_hv_p is not None:
-        print("Success HV PMOS! Data Shape:", df_hv_p.shape)
-
-if __name__ == "__main__":
-    test_integration()
+    assert df is not None
+    assert not df.empty
